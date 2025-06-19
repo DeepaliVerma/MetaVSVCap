@@ -1,0 +1,273 @@
+\documentclass[journal]{IEEEtran}
+\usepackage{amsmath,amsfonts}
+\usepackage{array}
+\usepackage{subfig}
+\usepackage{textcomp}
+\usepackage{stfloats}
+\usepackage{url}
+\usepackage{verbatim}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{cite}
+\usepackage{soul}
+\usepackage[colorlinks=true, urlcolor=blue, linkcolor=red]{hyperref}
+\usepackage[english]{babel}
+\usepackage{amsthm}
+\usepackage{algorithm, algorithmic}
+% \usepackage{}
+\usepackage{xcolor}
+\usepackage[linesnumbered,ruled,vlined]{algorithm2e}
+
+\title{Meta-Aware Pointer-Generator Enhanced VSVCap for Long-Tailed Video Captioning}
+
+\author{Deepali Verma, Tanima Dutta \\
+Indian Institute of Technology (BHU), Varanasi, India \\
+\{deepaliverma.rs.cse21, tanima.cse\}@iitbhu.ac.in}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Fine-grained video captioning models struggle with long-tailed vocabulary distributions, where rare events and objects are underrepresented, leading to generic or incomplete descriptions. We present MetaVSVCap, an enhanced version of the Visual-Semantic Graph-based Captioning framework (VSVCap), integrating a hybrid pointer-generator decoder and a meta-learning strategy. The pointer-generator enables copying rare terms from visual and semantic graphs, while the meta-learning framework promotes generalization to infrequent concepts through episodic training. Experiments on MSVD and MSR-VTT datasets show MetaVSVCap outperforms strong baselines, especially in rare term recall, achieving a +5.8 CIDEr improvement and a 12\% gain in rare concept coverage.
+\end{abstract}
+
+% \section{Introduction}
+% Video captioning is a key task in multimodal learning, aiming to generate natural language descriptions of video content. Recent methods, such as VSVCap, leverage visual and semantic graphs for improved context and reasoning. However, they often fail to capture rare or unseen concepts due to the long-tailed nature of real-world data, where a few frequent terms dominate and rare terms are insufficiently learned.
+
+% To address this, we propose MetaVSVCap, a model that combines the structured reasoning of VSVCap with a pointer-generator decoder to incorporate rare tokens directly, and a meta-learning framework to enable adaptability to tail distributions. This joint framework improves both the diversity and accuracy of captions, particularly in low-resource settings.
+
+\section{Introduction}
+Video captioning is a fundamental task in multimodal learning that seeks to generate coherent and contextually accurate natural language descriptions for dynamic visual content. It plays a crucial role in applications such as video retrieval, human-computer interaction, and accessibility for visually impaired users. Recent advancements have focused on integrating multiple modalities, visual frames, object interactions, and textual cues through graph-based models. One such approach, VSVCap, constructs semantic-visual graphs to enable structured reasoning over video content, capturing both spatial and temporal relationships.
+
+Despite its effectiveness, VSVCap and similar models struggle to generalize to rare or unseen concepts due to the long-tailed distribution of real-world captioning data. In such data, a small subset of high-frequency words dominate the training samples, while a vast majority of meaningful, fine-grained terms occur infrequently. This imbalance leads to models that tend to generate generic captions, ignoring rare but semantically important elements especially in open-domain or low-resource scenarios.
+
+To mitigate this challenge, we propose MetaVSVCap, a novel framework that enhances VSVCap with the pointer generator decoder and meta-learning. By combining structured graph-based reasoning with meta-adaptive capabilities and rare-word grounding, MetaVSVCap significantly improves the diversity, coverage, and accuracy of video captions, particularly for underrepresented concepts. This makes it especially effective for real-world applications where long-tail distributions are prevalent.
+
+To mitigate this challenge, we propose MetaVSVCap, a novel framework that enhances VSVCap with two key innovations:
+
+\begin{itemize}
+    \item \textbf{Pointer-Generator Decoder:} This module augments the traditional decoder with the ability to directly copy rare or unseen terms from the input semantic and visual graphs into the generated captions. This mechanism enhances factual grounding and enables the model to produce more specific and informative descriptions, particularly for low-frequency concepts.
+    
+    \item \textbf{Meta-Learning Objective:} To improve adaptability to underrepresented tail classes, MetaVSVCap introduces a meta-learning framework based on episodic training. The model is trained through simulated head-tail distributions, allowing it to generalize better to rare concepts and rapidly adapt in low-resource or open-domain scenarios.
+\end{itemize}
+
+\section{Related Work}
+\subsection{Graph-based Video Captioning}
+VSVCap, SGCN, and similar models use visual and semantic scene graphs to capture object interactions and relationships. However, their reliance on softmax-decoder architectures limits their ability to recover rare terms.
+
+\subsection{Pointer Networks and Copy Mechanisms}
+Pointer-generator networks have been successful in summarization and QA, enabling models to copy words from the input rather than generating them solely from a vocabulary.
+
+\subsection{Meta-Learning in NLP}
+Meta-learning strategies like MAML, Reptile, and Prototypical Networks allow quick adaptation to new or underrepresented tasks and have been applied to few-shot learning problems in captioning and classification.
+\section{Problem Formulation: Long-Tailed Distribution in Video Captioning}
+
+Let the vocabulary of all words used in video captions be denoted as $V = \{w_1, w_2, \dots, w_N\}$, where $N$ is the total number of unique words. The frequency of each word $w_i$ in the dataset is given by $f(w_i)$. In a typical video captioning dataset, the frequency distribution follows a power-law or Zipfian distribution:
+
+\begin{equation}
+f(w_i) \propto \frac{1}{i^\alpha}, \quad \text{where } i \text{ is the rank of the word and } \alpha > 1
+\end{equation}
+
+This implies that a small subset of high-frequency words dominate the dataset, while a large number of words appear very infrequently. Such a distribution is referred to as a \textbf{long-tailed distribution}, as shown in Figure \ref{fig:longtailed}.
+
+This imbalance leads to challenges in generating captions that accurately reflect rare but semantically important concepts. Models trained on such data tend to overfit to high-frequency, generic words and fail to generate diverse and meaningful descriptions for fine-grained or domain-specific content.
+
+% \vspace{0.5cm}
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=0.5\textwidth]{MetaVSVcap/longtailprobem.png}
+\caption{Simulated long-tailed word frequency distribution in a video captioning dataset. A few words dominate the dataset, while most words are rare and form the long tail.}
+\label{fig:longtailed}
+\end{figure}
+
+We divide the vocabulary into three tiers based on word frequency, as shown in Table~\ref{freqtier}. This categorization helps reveal the imbalanced usage patterns in video captioning datasets, where a small number of high-frequency words dominate the dataset, while a vast majority of words occur rarely.
+
+\begin{table}[!ht]
+\centering
+\caption{Vocabulary Tier Distribution}
+\label{freqtier}
+\begin{tabular}{@{}lccc@{}}
+\hline
+\textbf{Frequency Tier} & \textbf{Unique Words} & \textbf{\% of Vocab.} & \textbf{\% of Total Freq.} \\
+\hline
+High-Freq.          & 18                    & 1.8\%                      & 98.84\%                         \\
+Mid-Freq.           & 20                    & 2.0\%                      & 0.67\%                          \\
+Low-Freq.           & 962                   & 96.2\%                     & 0.49\%                          \\
+\hline
+\end{tabular}
+\label{tab:vocab_distribution}
+\end{table}
+
+This analysis highlights the need for specialized mechanisms in the VSVCap framework, such as knowledge-augmented captioning and pointer-generator networks, to address the long-tail bias and improve coverage of rare but important concepts.
+
+
+% \noindent
+% \section{Proposed Method}
+\section{Proposed Method}
+
+In this section, we introduce \textbf{MetaVSVCap}, an advanced video captioning framework that builds upon the VSVCap architecture to address the challenges of long-tailed word distributions. While VSVCap effectively constructs a joint visual-semantic graph for reasoning over video content, it does not adequately handle rare or unseen concepts due to their sparse representation in the training data. To overcome this, MetaVSVCap integrates two key components: a \textit{Pointer-Generator Decoder} and a \textit{Meta-Learning Objective}.
+
+\subsection{Pointer-Generator Decoder}
+
+To enable the generation of rare or domain-specific words that may not be well learned through traditional supervised learning, we augment the decoder with a pointer-generator mechanism. This component allows the model to flexibly switch between generating a word from the fixed vocabulary and copying a token directly from the input visual or semantic graphs. Specifically, the decoder computes a soft switch gate between generating and copying, based on contextual attention over graph nodes. This mechanism improves the specificity, diversity, and factual grounding of generated captions by incorporating visually and semantically aligned rare tokens.
+
+Given a context vector $C_t$ from graph attention and the decoder hidden state $h_t$, we compute:
+\begin{equation}
+P_{gen} = \text{softmax}(W h_t), \quad P_{copy} = \text{softmax}(A C_t)
+\end{equation}
+\begin{equation}
+P_{final} = (1 - \lambda) P_{gen} + \lambda P_{copy}
+\end{equation}
+where $\lambda = \sigma(W_{gate}[h_t; C_t])$ balances generating and copying.
+
+\subsection{Meta-Learning Objective}
+
+To further improve the model’s generalization to tail concepts, we employ a meta-learning strategy inspired by episodic training. During training, the model is exposed to synthetic tasks that simulate head-tail distributions, where a small subset of classes (frequent words) appear in all episodes, while others (tail words) are sampled with limited occurrences. This episodic formulation encourages the model to learn transferable representations and to quickly adapt to rare or underrepresented words during inference. The meta-learning objective is optimized jointly with the standard captioning loss.
+During training, we sample tasks with simulated head-tail splits. Each episode consists of a support set (few-shot) and a query set (evaluation). Using a first-order Reptile update:
+\begin{equation}
+\theta' = \theta - \alpha \nabla L_{support}, \quad \theta \leftarrow \theta + \beta (\theta' - \theta)
+\end{equation}
+\subsection{Joint Framework}
+
+The final MetaVSVCap model combines the structured reasoning ability of VSVCap, the rare-word grounding capability of the pointer-generator decoder, and the adaptive learning of the meta-learning objective. This unified approach enables MetaVSVCap to produce more informative, diverse, and contextually appropriate video captions, particularly in open-domain and low-resource environments.
+
+
+% \subsection{Model Overview}
+% MetaVSVCap extends VSVCap by incorporating:
+% \begin{itemize}
+%     \item A \textbf{Pointer-Generator Decoder} that allows rare terms from visual and semantic graphs to be copied into the output sequence.
+%     \item A \textbf{Meta-Learning Objective} trained via episodic learning, simulating head-tail distributions.
+% \end{itemize}
+
+% % \subsection{Pointer-Generator Decoder}
+% % Given a context vector $C_t$ from graph attention and the decoder hidden state $h_t$, we compute:
+% % \begin{equation}
+% % P_{gen} = \text{softmax}(W h_t), \quad P_{copy} = \text{softmax}(A C_t)
+% % \end{equation}
+% % \begin{equation}
+% % P_{final} = (1 - \lambda) P_{gen} + \lambda P_{copy}
+% % \end{equation}
+% % where $\lambda = \sigma(W_{gate}[h_t; C_t])$ balances generating and copying.
+
+% % \subsection{Meta-Learning Strategy}
+% % During training, we sample tasks with simulated head-tail splits. Each episode consists of a support set (few-shot) and a query set (evaluation). Using a first-order Reptile update:
+% % \begin{equation}
+% % \theta' = \theta - \alpha \nabla L_{support}, \quad \theta \leftarrow \theta + \beta (\theta' - \theta)
+% % \end{equation}
+
+% \subsection{Training Objective}
+The total loss function is:
+\begin{equation}
+L = L_{gen} + \lambda_1 L_{copy} + \lambda_2 L_{meta} + \lambda_3 L_{CIDEr}
+\end{equation}
+where $L_{gen}$ is the cross-entropy loss, $L_{copy}$ is the pointer supervision loss, and $L_{CIDEr}$ optimizes for caption quality.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%5
+
+\section{Experiments}
+\subsection{Datasets and Metrics}
+We evaluate on MSVD and MSR-VTT using BLEU, ROUGE-L, METEOR, CIDEr, and Rare-Term Recall (RTR). The vocabulary is split by frequency into head, medium, and tail.
+
+\subsection{Baselines}
+We compare with:
+\begin{itemize}
+    \item Transformer-based captioning
+    \item VSVCap (original)
+    \item OSCAR and Unified VLP models
+\end{itemize}
+
+\subsection{Ablation Studies}
+We conduct ablations to assess each component:
+\begin{itemize}
+    \item \textbf{No Pointer}: Use softmax decoder only
+    \item \textbf{No Meta}: Standard training without episodic updates
+    \item \textbf{Full Model}: Pointer + Meta jointly
+\end{itemize}
+
+\subsection{Results}
+\begin{table}[h]
+\centering
+\caption{CIDEr and Rare-Term Recall (RTR) comparison on MSVD.}
+\begin{tabular}{lcc}
+\hline
+Model & CIDEr & RTR (\%) \\
+\hline
+VSVCap & 87.4 & 19.6 \\
++ Pointer & 90.9 & 26.3 \\
++ Meta & 91.6 & 27.1 \\
+\textbf{MetaVSVCap (Full)} & \textbf{93.2} & \textbf{31.5} \\
+\hline
+\end{tabular}
+\end{table}
+
+\section{Conclusion and Future Work}
+We propose MetaVSVCap, a hybrid captioning model that combines pointer-generator decoding with meta-learning to improve long-tail performance. This method significantly boosts rare term inclusion and caption quality. Future directions include zero-shot captioning, low-resource deployment, and multilingual adaptation.
+
+\begin{algorithm}[!ht]
+\caption{Meta-Aware Pointer-Generator Enhanced VSVCap Pipeline}
+\begin{algorithmic}[1]
+\Require Video $V$, Object Detector, Preprocessed Captions, Rare Vocabulary $\mathcal{R}$
+\Ensure Generated Caption $\hat{C}$
+
+\State \textbf{Feature Extraction and Graph Construction}
+\State Extract frames $F$ from video $V$
+\For{each frame $f \in F$}
+    \State Detect objects $O = \{o_1, o_2, ..., o_n\}$ using an object detector
+    \State Extract visual features: $V_{\text{feats}} \gets \text{CNN}(f)$
+\EndFor
+\State Build visual graph $\mathcal{G}_v$ from object interactions
+\State Extract SPO triples from captions and build semantic graph $\mathcal{G}_s$
+
+\Statex
+
+\State \textbf{Cross-Graph Alignment}
+\State Encode visual graph: $\mathbf{V}_{\text{emb}} \gets \text{GCN}(\mathcal{G}_v)$
+\State Encode semantic graph: $\mathbf{S}_{\text{emb}} \gets \text{GCN}(\mathcal{G}_s)$
+\For{each node $v_i \in \mathcal{G}_v$}
+    \State Compute attention over $\mathbf{S}_{\text{emb}}$ to obtain aligned vector $\mathbf{A}_i$
+\EndFor
+\State Fuse embeddings: $\mathbf{C}_t \gets \mathbf{V}_{\text{emb}} \oplus \mathbf{A}$ \Comment{Concatenation or fusion}
+
+\Statex
+
+\State \textbf{Pointer-Generator Decoding}
+\State Initialize decoder state $(h_0, c_0)$
+\For{$t = 1$ to $T$}
+    \State Embed previous token $y_{t-1}$
+    \State $(h_t, c_t) \gets \text{LSTM}(y_{t-1}, h_{t-1}, c_{t-1})$
+    \State Compute attention context vector over $\mathbf{C}_t$
+    \State Compute generation probability: $P_{\text{gen}} \gets \text{softmax}(W_{\text{gen}} h_t)$
+    \State Compute copy probability: $P_{\text{copy}} \gets \text{softmax}(h_t^\top \mathbf{G}_{\text{nodes}})$
+    \State Compute switch gate: $\lambda \gets \sigma(W_{\text{gate}}[h_t; \mathbf{C}_t])$
+    \State Combine: $P_{\text{final}} \gets (1 - \lambda) P_{\text{gen}} + \lambda P_{\text{copy}}$
+    \State Sample or select token: $y_t \sim P_{\text{final}}$
+\EndFor
+
+\Statex
+
+\State \textbf{Meta-Learning Optimization}
+\For{each meta-task $\mathcal{T}_i$}
+    \State Sample support set $S_i$ and query set $Q_i$
+    \State Compute inner update: $\theta_i = \theta - \alpha \nabla_{\theta} \mathcal{L}_{\text{gen}}(S_i)$
+    \State Compute meta-loss: $\mathcal{L}_{\text{meta}} \gets \mathcal{L}_{\text{gen}}(Q_i; \theta_i)$
+\EndFor
+
+\State Compute total loss: 
+\[
+\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{gen}} + \lambda_1 \mathcal{L}_{\text{copy}} + \lambda_2 \mathcal{L}_{\text{meta}} + \lambda_3 \mathcal{L}_{\text{CIDEr}}
+\]
+\State Backpropagate and update model parameters
+
+
+\State \Return Final caption $\hat{C} = \{y_1, y_2, ..., y_T\}$
+\end{algorithmic}
+\end{algorithm}
+
+\bibliographystyle{IEEEtran}
+\bibliography{refs}
+
+\end{document}
