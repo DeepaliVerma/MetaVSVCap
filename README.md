@@ -63,9 +63,6 @@ pip install -r requirements.txt
 ----
 
 ## Dataset: MSVD (YouTube2Text)
-Download from YouTube2Text Dataset
-
-Extract video features using ResNet, C3D, or SlowFast.
 
 Run:
 python data/msvd_preprocess.py --video_dir ./MSVD/videos/ --caption_file ./MSVD/descriptions.csv
